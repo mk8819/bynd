@@ -126,8 +126,22 @@ STRUCTURE
          RT-TDDFT dipole data E-field puls in z
 
    ----------------------------------------------
-   Notes:
+   Notes on how to use the example script:
 
-   How to use the routines in detail can be 
-   understood from the header description of each
-   routine.
+   - copy all files in data/ into the folder where
+     optimize_frequencies.py is located. It might
+     be necessary to adjust the system paths in
+     optimize_frequencies.py so that the script
+     can find all necessary helper functions.
+
+   - Then simply run the script e.g.
+     python3 optimize_frequencies.py
+
+   - The script should perform all necessary 
+     calculations. In the end you should
+     have spectrum_bynd_vs_exact.pdf in your
+     folder which compares the spectrum of
+     a long-time RT-TDDFT simulation with the
+     spectrum obtained from BYND.
+
+   
