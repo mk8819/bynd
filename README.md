@@ -1,10 +1,12 @@
 BYND
 ===
-   This is the development version of BYND. 
+   This is the initial version of BYND.
    BYND is a code which combines approximate frequency
    results with exact short time dynamics to achieve
    an efficent calculation of electronic excitation
-   spectra.
+   spectra. Essentially, BYND is able to give
+   highly reliable results when other super-resolution
+   technidques such as compressed-sensing typically fail.
 
    BYND is totally independet of the underlying
    electronic structrue method/code.
@@ -13,6 +15,10 @@ BYND
    dipole signal (short time dynamics) and
    a sufficient accurate initial guess for the
    excitation spectrum.
+
+   BYND is still under active development and 
+   future version will include support for
+   quadrupole moments.
 
 
 STRUCTURE
