@@ -1,0 +1,4 @@
+To run this script, copy all .data and .dat files contained
+in the data/ folder to this directory. Then just run the script.
+It should yield a .pdf which compares the result from BYND with the
+result of a exact long time dynamics simulation.
