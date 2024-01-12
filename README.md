@@ -6,9 +6,9 @@ BYND
    an efficent calculation of electronic excitation
    spectra. Essentially, BYND is able to give
    highly reliable results when other super-resolution
-   technidques such as compressed-sensing typically fail.
+   techniques such as compressed-sensing typically fail.
 
-   BYND is totally independet of the underlying
+   BYND is totally independent of the underlying
    electronic structrue method/code.
    
    The only requirement is a time-dependent
@@ -16,7 +16,7 @@ BYND
    a sufficient accurate initial guess for the
    excitation spectrum.
 
-   BYND is still under active development and 
+   BYND is still under active development, and 
    future version will include support for
    quadrupole moments.
 
@@ -35,7 +35,7 @@ STRUCTURE
 
    These routines do not depend on the electronic 
    structure code. As long the data is provided
-   correctly.
+   correctly, these will run.
 
    These two routines use helper routines to 
    perform the task which are located in:
@@ -48,7 +48,7 @@ STRUCTURE
          -> generate_signal_tensor
          -> get_search_grid
 
-   That is all. All other routines are helper 
+   All other routines are helper 
    functions to handle the data structure of 
    the FHIaims RT-TDDFT routines.
 
@@ -64,10 +64,10 @@ STRUCTURE
    are performed using this short time signal.
    In the end the long time signal is then used to
    compare the exact result with the result obtained 
-   from BYND. For a real scenary the long time
+   from BYND. For a real scenario, the long time
    dynamics signal is not known.
 
-   This script is essentially some sort of wrapper
+   This script is essentially a wrapper
    around different functions which mostly handles I/O
    operations. At the heart of the script is 
    the function call to 
@@ -101,7 +101,7 @@ STRUCTURE
    ----------------------------------------------
    Helpers:
 
-   This folder contains only helper functions
+   This folder contains helper functions
    which are there for I/O or for calculating
    the final excitation spectrum.
    This is highly specific for FHIaims and needs
