@@ -35,8 +35,8 @@ n_time_steps = 20000 # total time steps
 # this is for cutting the short time signal out of the long time reference
 cut_start    = 100   # start point of the signal which we use as target in the optimization procedure
 cut_end      = 1500  # end point of the signal which we use as target in the optimization procedure
-# Note: We cut the first piece of the signal, the electric field puls at t=0 sometimes 
-#       causes spectral artifacts.
+#  It is helpful to cut the first piece of the signal, the electric field puls at the beginning
+#  sometimes causes spectral artifacts.
 
 # Read in all the data which must be in the current folder
 # ------------------------------------------------------------------------------------------------------------
