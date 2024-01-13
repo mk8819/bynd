@@ -95,3 +95,4 @@ def compute_spectrum_using_time_signal(flag_plot_results=True):
    
    plt.rc('mathtext', fontset="cm")
    plt.show()
+   plt.clf()
