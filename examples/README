@@ -7,8 +7,12 @@ In this example our short-time target signal is simply a cut out
 of certain length of a long-time dynamics simulation. This enables
 a direct comparison between BYND and the exact result. We do not
 further prepare the short-time piece. Sometimes, this ad hoc procedure
-can results in unwanted spectral behaviour. Ideally,
-one would like to have the end of the signal to be zero.
+can result in unwanted spectral behaviour. Ideally,
+one would like to have the end of the signal to be zero. This issue is
+not related to BYND it is merly a matter of how the short-time signal is pepared.
+Note that this is usually also a matter for methods like Fourier transform or
+compressed sensing applications.
+
 As this code is still in active development, future work is directed towards a tool
 which enables a simple preparation of the short-time signal. For
 now we advice users to prepare their own signals accordingly.
