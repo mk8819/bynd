@@ -172,7 +172,7 @@ write_to_file('line_search_amp_continuum_off.out', amp_input_off_continuum, sma_
 
 # calculate, plot and save the spectrum
 # -----------------------------------------------------------------------------------------------------------
-compute_spectrum_using_time_signal(flag_plot_results=True)
+compute_spectrum_using_time_signal(flag_plot_results=False)
 plot_simple_spectrum()
 # -----------------------------------------------------------------------------------------------------------
 # END
