@@ -17,8 +17,13 @@ BYND
    excitation spectrum.
 
    BYND is still under active development, and 
-   future version will include support for
-   quadrupole moments.
+   future version will include support for:
+   
+   - quadrupole moments
+   - basis set extrapolation
+   - replacing the line-search with more
+     advanced techniques
+   - routines for easier data handling
 
 
 STRUCTURE
@@ -36,6 +41,9 @@ STRUCTURE
    These routines do not depend on the electronic 
    structure code. As long the data is provided
    correctly, these will run.
+
+   See the provided example to find out how to use
+   both routines to perform an optimization.
 
    These two routines use helper routines to 
    perform the task which are located in:
