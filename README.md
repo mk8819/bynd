@@ -25,6 +25,9 @@ BYND
      advanced techniques
    - routines for easier data handling
 
+For a preprint article see also:
+https://arxiv.org/abs/2401.06929
+
 
 STRUCTURE
    ----------------------------------------------
@@ -105,6 +108,9 @@ STRUCTURE
      folder which compares the spectrum of
      a long-time RT-TDDFT simulation with the
      spectrum obtained from BYND.
+
+   Please use the example script for inspiration
+   how to use BYND in its current state. 
 
    ----------------------------------------------
    Helpers:
