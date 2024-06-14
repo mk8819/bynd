@@ -28,6 +28,13 @@ BYND
 For a preprint article see also:
 https://arxiv.org/abs/2401.06929
 
+The standard execution time of BYND on a standard laptop computer
+is usually just a few minuts.
+
+The code can be used right away as soon all requirements
+are installed.
+
+No non-standard hardware is needed.
 
 STRUCTURE
    ----------------------------------------------
