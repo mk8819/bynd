@@ -1,0 +1,9 @@
+@software{github_bynd,
+  author = {Kick, Matthias and Van Voorhis, Troy},
+  doi = {10.5281/zenodo.12771684},
+  month = {7},
+  title = {{Super-resolution techniques to simulate electronic spectra of large molecular systems}},
+  url = {https://github.com/mk8819/bynd},
+  version = {0.1.1},
+  year = {2024}
+}
