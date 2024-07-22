@@ -36,6 +36,8 @@ are installed.
 
 No non-standard hardware is needed.
 
+DOI: 10.5281/zenodo.12771684
+
 STRUCTURE
    ----------------------------------------------
    Main code:
