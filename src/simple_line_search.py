@@ -157,7 +157,6 @@ def perform_line_search_tensor_off_diagonal(
     for i in range(len(work_f)):
 
             search_grid = get_search_grid(work_f[i], rf, df)
-            #search_grid = get_search_grid(reference_f_work[i], rf, df)
             objective_tmp = np.zeros_like(search_grid)
 
             if diagonal_only==True:

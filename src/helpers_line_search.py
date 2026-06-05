@@ -17,6 +17,10 @@ import matplotlib.pyplot as plt
 
 import pprint
 
+# Physical conversion constants (values taken from FHI-aims)
+AU_TO_FS = 0.024188843265857   # atomic units of time → femtoseconds
+HA_TO_EV = 27.211386245988     # Hartree → electron volts
+
 
 def update_amplitudes_tensor(
     Y: np.ndarray,
@@ -75,55 +79,26 @@ def update_amplitudes_tensor(
     Pemmaraju et al., J. Chem. Theory Comput. 2018, 14 (4), 1910–1927.
     """
 
-    if off_diagonal==False:
+    n_samples  = len(Y[:,0])
+    n_features = len(input_freq)
 
-        n_samples  = len(Y[:,0])
-        n_targets  = len(Y[0,:])
-        n_features = len(input_freq)
+    X = np.zeros((n_samples, n_features))
+    for i in range(n_features):
+        X[:,i] = -1.0 * np.sin(input_freq[i]*time)
 
-        X = np.zeros((n_samples,n_features))
+    # Diagonal elements require non-negative amplitudes; off-diagonal do not.
+    positive = not off_diagonal
 
-        for i in range(n_features):
-            X[:,i] = -1.0 * np.sin(input_freq[i]*time)
+    if method == 'ridge':
+        clf = Ridge(alpha=reg_coef, fit_intercept=intercept, positive=positive, tol=1e-8)
+    elif method == 'elasticnet':
+        clf = ElasticNet(alpha=reg_coef, l1_ratio=ratio, fit_intercept=intercept, positive=positive, tol=0.001)
+    elif method == 'lasso':
+        clf = Lasso(alpha=reg_coef, fit_intercept=intercept, positive=True, tol=1e-3)
+    else:
+        print('ERROR: wrong regression method.')
 
-        if method=='ridge':
-            clf = Ridge(alpha=reg_coef, fit_intercept=intercept, positive=True, tol=1e-8)
-        elif method=='elasticnet':
-            clf = ElasticNet(alpha=reg_coef, l1_ratio=ratio, fit_intercept=intercept, positive=True, tol=0.001)            
-        elif method=='lasso':
-            clf = Lasso(alpha=reg_coef, fit_intercept=intercept, positive=True, tol=1e-3)
-        else:
-            print('ERROR: wrong regression method.')
-
-
-        clf.fit(X, Y)
-
-    else: # fit the off_diagonal elements
-
-        n_samples  = len(Y[:,0])
-        n_targets  = len(Y[0,:])
-        n_features = len(input_freq)
-
-        X = np.zeros((n_samples,n_features)) # we have also only sine here
-
-        # the first part are all the sin frequencies
-        for i in range(n_features):
-            X[:,i] = -1.0 * np.sin(input_freq[i]*time)
-
-        # non-negative constraint does only apply for the off-diagonal
-        if method=='ridge':
-            clf = Ridge(alpha=reg_coef, fit_intercept=intercept, positive=False, tol=1e-8)
-        elif method=='elasticnet':
-            clf = ElasticNet(alpha=reg_coef, l1_ratio=ratio, fit_intercept=intercept, positive=False, tol=0.001)            
-        elif method=='lasso':
-            clf = Lasso(alpha=reg_coef, fit_intercept=intercept, positive=True, tol=1e-3)
-        else:
-            print('ERROR: wrong regression method.')
-
-
-        clf.fit(X, Y)
-
-    # if intercept = False the intercept = 0.0
+    clf.fit(X, Y)
 
     return clf.coef_, clf.intercept_
 
@@ -293,31 +268,15 @@ def generate_signal_tensor(
     n_features = len(freq)
     n_samples = len(time)
 
-    if off_diagonal==False:
-        # this is our design matrix
+    X = np.zeros((n_samples, n_features))
+    for i in range(n_features):
+        X[:,i] = -1.0 * np.sin(freq[i]*time)
 
-        X = np.zeros((n_samples,n_features))
-
-        # TODO: we could actually store this
-        for i in range(n_features):
-            X[:,i] = -1.0 *  np.sin(freq[i]*time)
-
-        signal = np.dot(X,amp)
-
-    else:
-
-        X = np.zeros((n_samples, n_features))
-
-        for i in range(n_features): 
-            X[:,i] = -1.0 * np.sin(freq[i]*time)
-
-        signal = np.dot(X,amp)
-
+    signal = np.dot(X, amp)
 
     if np.size(intercept) > 1:
         for i in range(len(intercept)):
             signal[:,i] = signal[:,i] + intercept[i]
-
 
     return signal
 
@@ -381,18 +340,9 @@ def read_RT_TDDFT_data(t_unit_au: bool = False) -> tuple[np.ndarray, np.ndarray]
 
     print('loading RT-TDDFT data')
 
-    # for converting fs in au
-    au = 0.024188843265857 # this value have been taken from FHI-aims
-
     dip_x = DipoleData('x.rt-tddft.dipole.dat', "dipole_x")
     dip_y = DipoleData('y.rt-tddft.dipole.dat', "dipole_y")
     dip_z = DipoleData('z.rt-tddft.dipole.dat', "dipole_z")
-
-    #field = ['x.rt-tddft.ext-field.dat',None,None]
-
-    #fld_x = FieldData(field[0], "field_x", True)
-    #fld_y = FieldData(field[1], "field_y", True) if field[1] is not None else None
-    #fld_z = FieldData(field[2], "field_z", True) if field[2] is not None else None
 
     # in total we have 9 signals!
     dipole_xyz = np.zeros((len(dip_x.data['x']),9))
@@ -412,7 +362,7 @@ def read_RT_TDDFT_data(t_unit_au: bool = False) -> tuple[np.ndarray, np.ndarray]
     tddft_time = np.asarray(dip_x.data['t'])
 
     if t_unit_au==True:
-        tddft_time = tddft_time/au
+        tddft_time = tddft_time / AU_TO_FS
 
     return dipole_xyz, tddft_time
 
@@ -548,7 +498,6 @@ def filter_frequencies(
     for i in range(len(frequencies)):
         # uncomment for 2D
         if(np.abs(trans_mom_data[i,0]) > threshold or np.abs(trans_mom_data[i,1]) > threshold or np.abs(trans_mom_data[i,2]) > threshold):
-        #if(np.abs(trans_mom_data[i,0]) > threshold):
             index.append(i)
 
     trans_mom = np.zeros((len(index),3))
@@ -684,7 +633,7 @@ def print_init_messages(
     print('| Printing input frequencies next ... [E=h_quer*w]')
     print('|')
     np.set_printoptions(formatter={'float': '{: 0.3f}'.format})
-    print('|',input_freq*27.211384500)
+    print('|',input_freq*HA_TO_EV)
     print('|')
     print('| Initialization End')
     print('|----------------------------------------------------------')
@@ -711,7 +660,7 @@ def print_iteration(iteration: int, freq: np.ndarray, amp: np.ndarray) -> None:
     print('| Printing frequencies next ... [E=h_quer*w]')
     print('|')
     np.set_printoptions(formatter={'float': '{: 0.3f}'.format})
-    print('|',freq*27.211384500)
+    print('|',freq*HA_TO_EV)
     print('|')
     print('| Printing amplitudes next ... [xx],[yy],[zz]')
     print('|')

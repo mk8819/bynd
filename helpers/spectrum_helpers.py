@@ -5,6 +5,8 @@ import numpy as np
 from helpers_line_search import read_sma_data, generate_signal_tensor
 import matplotlib.pyplot as plt
 
+AU_TO_FS = 0.024188843265857   # atomic units of time → femtoseconds
+
 
 
 def get_line_search_dipole_data(
@@ -226,7 +228,7 @@ def generate_signal_and_save_to_file(
 
     # convert time [au] to [fs] for output
 
-    time = time * 0.02418884254 
+    time = time * AU_TO_FS
 
     if continuum==True:
 
