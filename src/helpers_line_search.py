@@ -1,3 +1,12 @@
+"""
+Helper functions for the BYND line search and FHI-aims RT-TDDFT I/O.
+
+Contains the regression-based amplitude update, the objective function,
+signal generation, search-grid construction, and file I/O routines used
+by the main optimisation loop.
+"""
+from __future__ import annotations
+
 import numpy as np
 from sklearn.linear_model import Ridge, Lasso, ElasticNet
 from sklearn.metrics import r2_score
@@ -9,58 +18,61 @@ import matplotlib.pyplot as plt
 import pprint
 
 
-"""
-This file contains all helper functions for the line search and
-functions for I/O of FHIaims RT-TDDFT data.
+def update_amplitudes_tensor(
+    Y: np.ndarray,
+    input_freq: np.ndarray,
+    time: np.ndarray,
+    off_diagonal: bool = False,
+    intercept: bool = False,
+    method: str = 'ridge',
+    reg_coef: float = 0.1,
+    ratio: float = 0.9,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Fit oscillation amplitudes to a target signal via linear regression.
 
-"""
+    Constructs a sine-wave design matrix from *input_freq* and *time*, then
+    solves the multivariate regression problem
 
-def update_amplitudes_tensor(Y, input_freq, time, off_diagonal=False, intercept=False, method='ridge', reg_coef=0.1, ratio=0.9):
+        Y_ij = X_il * A_lj
 
-    """
-    Performes a linear regression to fit the
-    amplitudes to the target signal
-    does this as a multi_variate regression
+    where *Y* is the target signal, *X* the design matrix, and *A* the
+    amplitude matrix to be found.
 
-    Y_ij = X_il * A_lj
+    Parameters
+    ----------
+    Y:
+        Target RT-TDDFT signal, shape ``(n_time, n_targets)``.
+        Pass only diagonal components when *off_diagonal* is ``False``,
+        and only off-diagonal components when it is ``True``.
+        The full external array should be ordered ``[xx, yy, zz, xy, xz, yz]``.
+    input_freq:
+        Frequencies involved in the regression, shape ``(n_freq,)``.
+    time:
+        Time grid, shape ``(n_time,)``.
+    off_diagonal:
+        ``True`` to fit off-diagonal polarizability components (allows
+        negative amplitudes); ``False`` for diagonal (non-negative only).
+    intercept:
+        ``True`` to fit a static (DC) offset term.  Use when the dipole
+        signal has a non-zero baseline.
+    method:
+        Regression algorithm: ``'ridge'``, ``'lasso'``, or ``'elasticnet'``.
+    reg_coef:
+        Regularisation strength (alpha).
+    ratio:
+        ElasticNet L1/L2 mixing ratio (ignored for other methods).
 
-    input:
+    Returns
+    -------
+    coef:
+        Fitted amplitudes, shape ``(n_targets, n_freq)``.
+    intercept_:
+        Fitted intercept terms, shape ``(n_targets,)``.  All zeros when
+        *intercept* is ``False``.
 
-    o) Y : this is the real-time target signal
-           if off-diagonal=True target signal is only 
-           the off diagonal elements
-           if off-diagonal=False Y should only contain
-           the diagonal elements.
-
-           the total target array outside should be ordered
-           in the following way
-
-           Y[xx, yy, zz, xy, xz, yz]
-
-           Note that xy = yx, xz = zx, zy = yz due to
-           symmetry of the polarizability tensor
-
-    o) input_freq: all the frequencies involved int the line
-                   search, 1D array
-
-    o) off_diagonal: boolean, optional, specifies if diagonal or 
-                     off diagonal elements should be fitted
-
-    o) intercept: boolean, optional
-                  this should be set to true if the electric dipole
-                  has a static component
-
-    output:
-
-    o) clf.coef_: amplitueds (n_targets x n_features)-array
-
-    o) clf.intercept_: intercept terms (n_targets)-array
-
-
-    The dipole osscilates with sine waves only:
-
-    Journal of Chemical Theory and Computation 2018 14 (4), 1910-1927
-
+    References
+    ----------
+    Pemmaraju et al., J. Chem. Theory Comput. 2018, 14 (4), 1910–1927.
     """
 
     if off_diagonal==False:
@@ -117,26 +129,22 @@ def update_amplitudes_tensor(Y, input_freq, time, off_diagonal=False, intercept=
 
 
 
-def sort_amplitudes_tensor(amplitude_2D):
+def sort_amplitudes_tensor(amplitude_2D: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Return index arrays that sort frequencies by total amplitude.
 
-    """
-    Returns the indexing array which sorts
-    the frequencies according to their amplitude
+    Parameters
+    ----------
+    amplitude_2D:
+        Amplitude array, shape ``(n_targets, n_freq)``.
 
-    input:
-
-    o) amplitudes_2D: (n_targets x n_features)-array
-                      which contains the amplitudes
-
-    output:
-    
-    o) index_sort: the array which sorts the frequencies
-                   the one with the highest amplitude
-                   comes first
-
-    o) index_undo_sort: restors the original sorting
-                        of the frequencies
-
+    Returns
+    -------
+    index_sort:
+        Indices that reorder frequencies from highest to lowest summed
+        absolute amplitude across all targets.
+    index_undo_sort:
+        Indices that restore the original frequency ordering after
+        applying *index_sort*.
     """
 
     tmp = np.zeros(len(amplitude_2D[0,:]))
@@ -154,26 +162,43 @@ def sort_amplitudes_tensor(amplitude_2D):
 
 
 
-def objective_tensor(predicted, reference, f_in, f_sma, method='RMSE', reg_coef=1.0):
+def objective_tensor(
+    predicted: np.ndarray,
+    reference: np.ndarray,
+    f_in: np.ndarray,
+    f_sma: np.ndarray,
+    method: str = 'RMSE',
+    reg_coef: float = 1.0,
+) -> float:
+    """Evaluate the regularised loss between a predicted and reference signal.
 
-    """
-    calculates the error between prediction and reference signal
-    using the L1 or L2 norm.
+    The loss has two components: a fidelity term measuring how well
+    *predicted* matches *reference*, and a regularisation term that penalises
+    large deviations of the current frequency from the initial SMA guess.
 
-    In addition it also adds a penalty if frequencies move to far away from 
-    the initial SMA guess.
+    Parameters
+    ----------
+    predicted:
+        Model signal at the candidate frequency, shape ``(n_time, n_targets)``.
+    reference:
+        RT-TDDFT target signal, shape ``(n_time, n_targets)``.
+    f_in:
+        Sine wave evaluated at the current candidate frequency,
+        shape ``(n_time,)``.
+    f_sma:
+        Sine wave evaluated at the initial SMA frequency (regularisation
+        anchor), shape ``(n_time,)``.
+    method:
+        Loss function: ``'L1'``, ``'L2'``, ``'MAE'``, ``'MSE'``, or
+        ``'RMSE'``.
+    reg_coef:
+        Regularisation strength (lambda).  A near-zero value effectively
+        disables the frequency-deviation penalty.
 
-    Input:
-    o) prediction, N dimensional numpy array
-    o) reference, N dimensional numpy array
-    o) method, string, either L1 or L2 or RMSE
-    o) reg_coef: regularization coefficients usually called lambda
-    o) f_in: single sine wave with current frequency
-    o) f_sma: single sine wave with initial frequency
-
-    Output:
-    o) objective, the value of the objective function for the 
-                  two input frequencies
+    Returns
+    -------
+    float
+        Scalar objective value for the current candidate frequency.
     """
 
     # for safety reasons
@@ -223,30 +248,46 @@ def objective_tensor(predicted, reference, f_in, f_sma, method='RMSE', reg_coef=
 
 
 
-def generate_signal_tensor(amp, freq, time, dipole=False, off_diagonal=False, intercept=None):
+def generate_signal_tensor(
+    amp: np.ndarray,
+    freq: np.ndarray,
+    time: np.ndarray,
+    dipole: bool = False,
+    off_diagonal: bool = False,
+    intercept: np.ndarray | None = None,
+) -> np.ndarray:
+    """Reconstruct a multi-target signal from amplitudes and frequencies.
 
-    """
-    Generates the predicted signal if the amplitudes are
-    stored in a 2D array.
+    Evaluates the model signal
 
-    The signal is created by
+        Y_ti = X_tj * Amp_ji
 
-    Y_ti = X_tj * Amp_ji
+    where ``X_tj = -sin(freq_j * time_t)`` is the sine-wave design matrix.
+    Note: *amp* must be passed as the **transpose** of the
+    ``(n_targets, n_freq)`` array produced by :func:`update_amplitudes_tensor`,
+    i.e. shape ``(n_freq, n_targets)``.
 
-    however Amp is stored as Amp_ij so it needs to be
-    transposed before the function call.
+    Parameters
+    ----------
+    amp:
+        Amplitude array, shape ``(n_freq, n_targets)``.
+    freq:
+        Frequencies, shape ``(n_freq,)``.
+    time:
+        Time grid in atomic units, shape ``(n_time,)``.
+    dipole:
+        Reserved for future use; currently unused.
+    off_diagonal:
+        Included for API symmetry; the signal formula is identical for
+        diagonal and off-diagonal components.
+    intercept:
+        Static offset per target, shape ``(n_targets,)``.  Pass ``None``
+        (or an array of length 1) to skip the intercept correction.
 
-    input:
-
-    o) amp: 2D amplitude array
-    o) freq: array which contains all frequencies
-    o) time: time in au
-    o) intercept: the intercept from the amplitude fitting
-                  (n_target)-array
-    
-    output:
-
-    o) signal: the current signal which is under optimization
+    Returns
+    -------
+    signal:
+        Reconstructed signal, shape ``(n_time, n_targets)``.
     """
 
     n_features = len(freq)
@@ -282,16 +323,22 @@ def generate_signal_tensor(amp, freq, time, dipole=False, off_diagonal=False, in
 
 
 
-def get_search_grid(f, rf, df):
+def get_search_grid(f: float, rf: float, df: float) -> np.ndarray:
+    """Build a symmetric frequency search grid centred on *f*.
 
-    """
-    This function returns a symmetric search grid around an initial frequency f
-    
-    Input:
-    o) f: frequency
-    o) rf: search radius around f
-    o) df: search grid spacing
+    Parameters
+    ----------
+    f:
+        Centre frequency (atomic units).
+    rf:
+        Half-width of the search window (atomic units).
+    df:
+        Grid spacing (atomic units).
 
+    Returns
+    -------
+    np.ndarray
+        Evenly spaced grid over ``[f - rf, f + rf]`` with step *df*.
     """
 
     N = (2.* rf)/df + 1
@@ -304,35 +351,32 @@ def get_search_grid(f, rf, df):
 
 
 
-def read_RT_TDDFT_data(t_unit_au=False):
+def read_RT_TDDFT_data(t_unit_au: bool = False) -> tuple[np.ndarray, np.ndarray]:
+    """Load RT-TDDFT dipole data from FHI-aims output files.
 
-    """
-    This function reads in all necessary input from the RT-TDDFT data.
-    It is basically a wrapper for the FHI-aims RT-TDDFT utilities
-    contained in the helpers_rt-tdddft-fhiaims-utilities.py file.
+    Wrapper around :class:`DipoleData` that reads the three dipole files
+    produced by separate x, y, and z field-pulse simulations and assembles
+    them into a single array ordered as
+    ``[xx, xy, xz, yx, yy, yz, zx, zy, zz]``.
 
-    This functions assumes that x, y and z dipole are stored 
-    seperately in
+    Expected files in the working directory::
 
-      x.rt-tddft.dipole.dat
-      y.rt-tddft.dipole.dat
-      z.rt-tddft.dipole.dat
+        x.rt-tddft.dipole.dat
+        y.rt-tddft.dipole.dat
+        z.rt-tddft.dipole.dat
 
-    The external field has to be stored in 
+    Parameters
+    ----------
+    t_unit_au:
+        If ``True``, convert the time axis from femtoseconds to atomic units.
 
-      x.rt-tddft.ext-field.dat
-
-    Input:
-
-    o) t_unit_au: boolean switch to have the time in au instead of
-                  fs
-
-    Output:
-
-    o) dipole_xyz: a compact array containing all dipole signals
-    o) tddft_time: default unit depends on FHI-aims output
-                   can be either fs or au
-
+    Returns
+    -------
+    dipole_xyz:
+        Dipole tensor signal, shape ``(n_time, 9)``.
+    tddft_time:
+        Time grid in femtoseconds (default) or atomic units when
+        *t_unit_au* is ``True``, shape ``(n_time,)``.
     """
 
     print('loading RT-TDDFT data')
@@ -374,12 +418,35 @@ def read_RT_TDDFT_data(t_unit_au=False):
 
 
 
-def read_sma_data(file_osci, file_trans, frq_eV=False):
+def read_sma_data(
+    file_osci: str | None,
+    file_trans: str | None,
+    frq_eV: bool = False,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray] | None:
+    """Read excitation frequencies, oscillator strengths, and transition dipoles from SMA output.
 
-    """
-    just for reading in the ouput from the SMA
+    Parameters
+    ----------
+    file_osci:
+        Path to the SMA oscillator-strength file.  Returns ``None`` if
+        ``None`` is passed.
+    file_trans:
+        Path to the SMA transition-dipole-moment file.  Returns ``None``
+        if ``None`` is passed.
+    frq_eV:
+        If ``True``, read frequencies from the eV column; otherwise from
+        the Hartree column (default).
 
-    The obtained frequency or excitations are read in in hartree
+    Returns
+    -------
+    frq:
+        Excitation frequencies in Hartree (or eV when *frq_eV* is ``True``),
+        shape ``(n_exc,)``.
+    ostren:
+        Oscillator strengths, shape ``(n_exc,)``.
+    trans_mom:
+        Transition dipole moments ``[x, y, z]`` per excitation,
+        shape ``(n_exc, 3)``.
     """
 
     print('loading SMA data')
@@ -443,25 +510,35 @@ def read_sma_data(file_osci, file_trans, frq_eV=False):
 
 
 
-def filter_frequencies(frequencies, trans_mom_data, threshold, n_frequencies=None):
+def filter_frequencies(
+    frequencies: np.ndarray,
+    trans_mom_data: np.ndarray,
+    threshold: float,
+    n_frequencies: int | None = None,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Retain only SMA frequencies with a significant transition dipole moment.
 
-    """
-    This routine filters the sma frequencies according to the
-    trans. dipole moment. Only frequencies which actually
-    show a trans. dipole moment are included. And 
-    which are above a certain amplitude threshold
-    
-    input:
-    
-    o) frequencies: SMA frequencies
-    o) trans_mom_data: SMA transition dipole moment
-    o) threshold: threshold for the transition dipole moment
+    An excitation is kept when at least one of its x, y, or z transition
+    dipole moment components exceeds *threshold* in absolute value.
 
-    output:
+    Parameters
+    ----------
+    frequencies:
+        SMA excitation frequencies, shape ``(n_exc,)``.
+    trans_mom_data:
+        Transition dipole moments, shape ``(n_exc, 3)``.
+    threshold:
+        Minimum absolute transition dipole moment required for inclusion.
+    n_frequencies:
+        Reserved for future use (maximum number of frequencies to keep).
 
-    o) freq: filtered frequencies
-    o) trans_mom: filtered transition diople moments
-
+    Returns
+    -------
+    freq:
+        Filtered frequencies, shape ``(n_kept,)``.
+    trans_mom:
+        Transition dipole moments for the kept excitations,
+        shape ``(n_kept, 3)``.
     """
 
     #TODO: restrict the maximum number of frequencies
@@ -485,18 +562,31 @@ def filter_frequencies(frequencies, trans_mom_data, threshold, n_frequencies=Non
 
 
 
-def write_to_file(file_name, amp, freq, off_diag=False, intercept=None):
-    
-    """
-    writes frequencies and amplitues to a file which is
-    specified by file_name
+def write_to_file(
+    file_name: str,
+    amp: np.ndarray,
+    freq: np.ndarray,
+    off_diag: bool = False,
+    intercept: np.ndarray | None = None,
+) -> None:
+    """Write optimised frequencies and amplitudes to a plain-text file.
 
-    input:
-
-    o) file_name
-    o) amp: Amplitueds, can be a vector or a 2D array
-    o) freq: frequencies corresponding to the amplitudes
-
+    Parameters
+    ----------
+    file_name:
+        Output file path.
+    amp:
+        Amplitudes.  Either a 1-D array ``(n_freq,)`` or a 2-D array
+        ``(n_targets, n_freq)``.
+    freq:
+        Frequencies corresponding to the columns of *amp*, shape
+        ``(n_freq,)``.
+    off_diag:
+        If ``True``, write off-diagonal header labels (xy, xz, yz);
+        otherwise write diagonal labels (xx, yy, zz).
+    intercept:
+        Static offset per target, shape ``(n_targets,)``.  Written as a
+        comment line when its length exceeds 1.
     """
 
 
@@ -549,10 +639,33 @@ def write_to_file(file_name, amp, freq, off_diag=False, intercept=None):
 
 
 
-def print_init_messages(n_iterations, switch_to_off, search_radius, search_radius_init, grid_spacing, input_freq, len_signal):
+def print_init_messages(
+    n_iterations: int,
+    switch_to_off: int,
+    search_radius: float,
+    search_radius_init: float,
+    grid_spacing: float,
+    input_freq: np.ndarray,
+    len_signal: int,
+) -> None:
+    """Print a formatted summary of the optimisation settings to stdout.
 
-    """
-    This routine prints initial messages and important settings to std out
+    Parameters
+    ----------
+    n_iterations:
+        Total number of line-search iterations.
+    switch_to_off:
+        Iteration number at which off-diagonal optimisation begins.
+    search_radius:
+        Frequency search half-width used in later iterations.
+    search_radius_init:
+        Frequency search half-width used in the first iteration.
+    grid_spacing:
+        Step size of the frequency search grid.
+    input_freq:
+        Initial frequency array (printed in eV), shape ``(n_freq,)``.
+    len_signal:
+        Number of time steps in the target signal.
     """
 
     print('|----------------------------------------------------------')
@@ -578,10 +691,18 @@ def print_init_messages(n_iterations, switch_to_off, search_radius, search_radiu
 
 
 
-def print_iteration(iteration, freq, amp):
+def print_iteration(iteration: int, freq: np.ndarray, amp: np.ndarray) -> None:
+    """Print the current frequency and amplitude values for one iteration.
 
-    """
-    This routine prints the current iteration results
+    Parameters
+    ----------
+    iteration:
+        Zero-based iteration index (displayed as ``iteration + 1``).
+    freq:
+        Current frequencies in atomic units, shape ``(n_freq,)``
+        (printed converted to eV).
+    amp:
+        Current amplitude array, shape ``(n_targets, n_freq)``.
     """
 
     print('|')

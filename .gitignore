@@ -1,0 +1,51 @@
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+
+# ── Distribution / packaging ──────────────────────────────────────────────────
+dist/
+build/
+*.egg-info/
+*.egg
+.eggs/
+
+# ── Virtual environments ───────────────────────────────────────────────────────
+.venv/
+venv/
+env/
+ENV/
+
+# ── Jupyter ────────────────────────────────────────────────────────────────────
+.ipynb_checkpoints/
+*.ipynb
+
+# ── BYND output files ──────────────────────────────────────────────────────────
+# Amplitude/frequency files written by the line search
+*.out
+
+# Reconstructed dipole signals (written by generate_signal_and_save_to_file)
+line_search_*.dat
+line_search_*_select_only.dat
+
+# Fourier-transform output from helpers_rt_tddft_fhiaims_utilities
+line-search-tddft.*.dat
+rt-tddft.dipole_ft.dat
+rt-tddft.polarisability.dat
+rt-tddft.abs_strength.dat
+rt-tddft.pow_spec.dat
+
+# Final spectrum comparison plot
+spectrum_bynd_vs_exact.pdf
+
+# ── IDE ────────────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# ── OS ─────────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db

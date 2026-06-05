@@ -1,9 +1,11 @@
 """
-This routine does not depend on the underlying electronic structure code.
-One only need to provide the correct target arrays.
+Core line search optimization for BYND.
 
+This module does not depend on the underlying electronic structure code.
+The caller only needs to provide the correctly formatted target arrays.
 """
-### general imports
+from __future__ import annotations
+
 import os
 import time
 
@@ -11,67 +13,87 @@ import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.linear_model import Ridge
 
-### imports from helper routines
 from helpers_line_search import get_search_grid
 from helpers_line_search import update_amplitudes_tensor, sort_amplitudes_tensor, generate_signal_tensor, \
         objective_tensor
 
 
 
-def perform_line_search_tensor_off_diagonal(target, input_a, input_a_off, input_f, time_grid, reference_f, rf=0.5, df=0.01, \
-        amplitude_only=False, diagonal_only=True, diag_dim=3, calc_intercept=False, reg_method='ridge', alpha_value=0.1, l1_ratio_value=0.8, \
-        initial=None):
+def perform_line_search_tensor_off_diagonal(
+    target: np.ndarray,
+    input_a: np.ndarray,
+    input_a_off: np.ndarray,
+    input_f: np.ndarray,
+    time_grid: np.ndarray,
+    reference_f: np.ndarray,
+    rf: float = 0.5,
+    df: float = 0.01,
+    amplitude_only: bool = False,
+    diagonal_only: bool = True,
+    diag_dim: int = 3,
+    calc_intercept: bool = False,
+    reg_method: str = 'ridge',
+    alpha_value: float = 0.1,
+    l1_ratio_value: float = 0.8,
+    initial: str | None = None,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray | int]:
+    """Optimize excitation frequencies and amplitudes via a greedy line search.
 
-    """
-    Target is now a 2D array, and it handles also off_diagonal elements.
+    Iterates over each frequency in *input_f*, sweeps a small search grid
+    around it, and keeps the grid point that minimises an L1 loss against the
+    RT-TDDFT target signal.  After each frequency update the amplitudes are
+    re-fitted by linear regression.  Both diagonal (xx, yy, zz) and
+    off-diagonal (xy, xz, yz) polarizability components are supported.
 
-    input:
+    Parameters
+    ----------
+    target:
+        RT-TDDFT reference signal, shape ``(n_time, n_targets)``.
+        Components must be ordered ``[xx, yy, zz, xy, xz, yz]``.
+    input_a:
+        Initial diagonal amplitudes, shape ``(n_targets_diag, n_freq)``.
+    input_a_off:
+        Initial off-diagonal amplitudes, shape ``(n_targets_off, n_freq)``.
+        Ignored when *diagonal_only* is ``True``.
+    input_f:
+        Starting frequencies for the line search, shape ``(n_freq,)``.
+    time_grid:
+        Time grid matching the first axis of *target*, shape ``(n_time,)``.
+    reference_f:
+        Initial SMA frequencies used as a regularisation anchor,
+        shape ``(n_freq,)``.
+    rf:
+        Half-width of the frequency search window (atomic units).
+    df:
+        Grid spacing within the search window (atomic units).
+    amplitude_only:
+        If ``True``, skip the frequency search and only re-fit amplitudes.
+    diagonal_only:
+        If ``True``, optimise only the diagonal polarizability components.
+    diag_dim:
+        Number of diagonal targets.  Set to ``1`` together with
+        ``diagonal_only=True`` to handle a single target signal.
+    calc_intercept:
+        If ``True``, fit a static (DC) offset in the amplitude regression.
+    reg_method:
+        Regression method; one of ``'ridge'``, ``'lasso'``, ``'elasticnet'``.
+    alpha_value:
+        Regularisation strength for the regression.
+    l1_ratio_value:
+        ElasticNet mixing parameter (used only when *reg_method='elasticnet'*).
+    initial:
+        Initialisation strategy for amplitudes.  Pass ``'random'`` to add
+        small random noise after the first amplitude fit.
 
-    o) target: 2D array of RT-TDDFT signals first dimension is time
-               second dimension is n_targets long (time,n_targets).
-               n_targets have to be ordered in the following way:
-
-               [xx, yy, zz, xy, xz, yz]
-
-    o) input_a: amplitudes for xx, yy, zz (n_target, n_frequency) array
-
-    o) input_a_off: amplitudes for xy, xz, yz (n_target, 2*n_frequency) array
-                    Note, that the off-diagonal elements contain sin and cos
-                    thus we have twice the amount of amplitudes.
-
-    o) input_f: 1D array of all the frequencies which should take part in the 
-                line search
-
-    o) time_grid: 1D array of time, has to be as long as the target time dimension
-
-    o) reference_f: 1D, the initial sma frequencies
-
-    o) rf: radius of the line search
-
-    o) df: search grid spacing in the line search
-
-    o) amplitude_only: boolean, defines if only amplitudes should be fitted
-                       or not
-
-    o) diagonal_only: boolean, defines if only diagaonal elements should be 
-                      considered or if also off-diagonal elements should be
-                      included in the line search
-
-    o) diag_dim: specifies how many diagonal elements are present,
-                 set this to 1 and diagonal_only to True for considering
-                 only one target 
-
-    output:
-
-    o) work_f: optimized frequencies, 1D array, original ordering
-
-    o) work_a: optimized amplitudes of all diagonal elements,
-               2D array (n_targets, n_features), original ordering
-
-    o) work_a_off: optimized amplitudes of all off diagonal elements,
-                   2D array (n_targets, 2*n_features), original ordering
-                   if diagonal_only is true this is only a dummy integer
-
+    Returns
+    -------
+    work_f:
+        Optimised frequencies, shape ``(n_freq,)``, in original order.
+    work_a:
+        Optimised diagonal amplitudes, shape ``(n_targets_diag, n_freq)``.
+    work_a_off:
+        Optimised off-diagonal amplitudes, shape ``(n_targets_off, n_freq)``.
+        Returns the integer ``0`` when *diagonal_only* is ``True``.
     """
 
 

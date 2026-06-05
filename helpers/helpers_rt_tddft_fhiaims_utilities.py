@@ -1083,7 +1083,7 @@ class ElectronicDipole(VectorObservable):
     
     self.powsp["f"] = self.pol["f"] 
  
-    self.powsp["int"] = np.trapz(self.powsp["aval"], self.powsp["f"])
+    self.powsp["int"] = np.trapezoid(self.powsp["aval"], self.powsp["f"])
     
     if self.flag_normalize:
       self.powsp["aval"] = self.normalize_max(self.powsp["aval"])
@@ -1114,7 +1114,7 @@ class ElectronicDipole(VectorObservable):
     
     self.stren["f"] = self.pol["f"]
     
-    self.stren["int"] = np.trapz(self.stren["aval"], self.stren["f"])
+    self.stren["int"] = np.trapezoid(self.stren["aval"], self.stren["f"])
     
     if self.flag_normalize:
       self.stren["aval"] = self.normalize_max(self.stren["aval"])
@@ -1342,14 +1342,14 @@ class ElectronicCurrent(VectorObservable):
     
     self.dielf["f"] = self.con["f"]
     
-    self.dielf["int"] = np.trapz(self.dielf["aval"], self.dielf["f"])
+    self.dielf["int"] = np.trapezoid(self.dielf["aval"], self.dielf["f"])
    
     fsum_p = np.array([ w * eps.imag for (w, eps) in zip(self.dielf["f"], self.dielf["val"]) ])
-    self.dielf["fsum"] = np.trapz(fsum_p, self.dielf["f"])
+    self.dielf["fsum"] = np.trapezoid(fsum_p, self.dielf["f"])
 
     fsum_w = []
     for i, fsi in enumerate(fsum_p):
-      fsum_w.append(np.trapz(fsum_p[:i+1], self.dielf["f"][:i+1]))
+      fsum_w.append(np.trapezoid(fsum_p[:i+1], self.dielf["f"][:i+1]))
 
     with open("check_fsum_eps.dat", "w") as f:
       for i, wi in enumerate(self.dielf["f"]):
@@ -1522,7 +1522,7 @@ class MagneticMoment(VectorObservable):
     
     self.rstr["f"] = self.rtens["f"]
     
-    self.rstr["int"] = np.trapz(self.rstr["aval"], self.rstr["f"])
+    self.rstr["int"] = np.trapezoid(self.rstr["aval"], self.rstr["f"])
     
     print("> Rotatory strength calculated.")
 

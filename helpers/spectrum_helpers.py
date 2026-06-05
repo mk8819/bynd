@@ -1,40 +1,56 @@
+"""I/O helpers for reading and writing BYND line-search results."""
+from __future__ import annotations
+
 import numpy as np
 from helpers_line_search import read_sma_data, generate_signal_tensor
 import matplotlib.pyplot as plt
 
 
 
-def get_line_search_dipole_data(amp_file, amp_continuum_file, continuum=False):
+def get_line_search_dipole_data(
+    amp_file: str,
+    amp_continuum_file: str,
+    continuum: bool = False,
+) -> tuple[np.ndarray, ...]:
+    """Read line-search frequencies and amplitudes from output files.
 
-    """
-    The wrapper script optimize_frequencies writes the final amplitdes and
-    frequencies to a file. This function can read from these files.
-    This I/O might not be very elegant but we can do postprocessing
-    without recalculating the frequencies.
+    The wrapper script ``optimize_frequencies.py`` writes optimised
+    amplitudes and frequencies to plain-text files.  This function reads
+    those files back for post-processing without repeating the optimisation.
 
-    Input:
+    Parameters
+    ----------
+    amp_file:
+        Path to the narrow-feature amplitude file produced by the line
+        search (e.g. ``line_search_amp.out``).
+    amp_continuum_file:
+        Path to the continuum amplitude file.  Only read when *continuum*
+        is ``True``.
+    continuum:
+        If ``True``, also read the continuum amplitude file and return all
+        six arrays; otherwise return only the three narrow-feature arrays.
 
-    o) amp_file:           file containing the amplitudes of the narrow features
+    Returns
+    -------
+    When *continuum* is ``False``:
+        ``(frq, amp, intercept_value)``
 
-    o) amp_continuum_file: file containing continuum amplitudes
+    When *continuum* is ``True``:
+        ``(frq, frq_continuum, amp, amp_continuum,
+        intercept_value, intercept_value_continuum)``
 
-    o) continuum:          boolean if the continuum should be read or not
-
-
-    Output:
-
-    o) frq:                       frequencies of narrow features
-
-    o) frq_continuum:             frequencies of continuum
-
-    o) amp:                       amplitudes of narrow features
-
-    o) amp_continuum:             amplitudes of continuum
-
-    o) intercept_value:           intercept of narrow feature signal
-
-    o) intercept_value_continuum: intercept of continuum signal
-
+    frq:
+        Narrow-feature frequencies, shape ``(n_freq,)``.
+    frq_continuum:
+        Continuum frequencies, shape ``(n_sma_freq,)``.
+    amp:
+        Narrow-feature amplitudes ``[xx, yy, zz]``, shape ``(3, n_freq)``.
+    amp_continuum:
+        Continuum amplitudes ``[xx, yy, zz]``, shape ``(3, n_sma_freq)``.
+    intercept_value:
+        Static offset for the narrow-feature signal, shape ``(3,)``.
+    intercept_value_continuum:
+        Static offset for the continuum signal, shape ``(3,)``.
     """
 
     intercept=False
@@ -153,11 +169,48 @@ def get_line_search_dipole_data(amp_file, amp_continuum_file, continuum=False):
         return frq, frq_continuum, amp, amp_continuum, intercept_value, intercept_value_continuum
 
 
-def generate_signal_and_save_to_file(amp, amp_continuum, frq, frq_continuum, start, end, n_points, intercept_value=None, intercept_value_continuum=None, continuum=False):
+def generate_signal_and_save_to_file(
+    amp: np.ndarray,
+    amp_continuum: np.ndarray,
+    frq: np.ndarray,
+    frq_continuum: np.ndarray,
+    start: float,
+    end: float,
+    n_points: int,
+    intercept_value: np.ndarray | None = None,
+    intercept_value_continuum: np.ndarray | None = None,
+    continuum: bool = False,
+) -> None:
+    """Reconstruct dipole signals from line-search results and write FHI-aims files.
 
-    """
-    This functions generates a signal out of the line search frequencies and amplitudes.
-    It saves the signal to file and accounts for the right FHIaims format.
+    Synthesises the time-domain dipole signal from the optimised frequencies
+    and amplitudes, then saves it as FHI-aims RT-TDDFT dipole files
+    (one per Cartesian direction).
+
+    Parameters
+    ----------
+    amp:
+        Narrow-feature amplitudes ``[xx, yy, zz]``, shape ``(3, n_freq)``.
+    amp_continuum:
+        Continuum amplitudes ``[xx, yy, zz]``, shape ``(3, n_sma_freq)``.
+    frq:
+        Narrow-feature frequencies in atomic units, shape ``(n_freq,)``.
+    frq_continuum:
+        Continuum frequencies in atomic units, shape ``(n_sma_freq,)``.
+    start:
+        Start time of the output grid in atomic units.
+    end:
+        End time of the output grid in atomic units.
+    n_points:
+        Number of time points in the output grid.
+    intercept_value:
+        Static offset for the narrow-feature signal, shape ``(3,)``.
+    intercept_value_continuum:
+        Static offset for the continuum signal, shape ``(3,)``.
+    continuum:
+        If ``True``, add the continuum signal to the narrow-feature signal
+        and write to ``line_search_{x,y,z}.dipole.dat``; otherwise write
+        ``line_search_{x,y,z}_select_only.dipole.dat``.
     """
 
     time, dt = np.linspace(start, end, n_points, retstep=True, endpoint=False) # in au
