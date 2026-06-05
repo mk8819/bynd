@@ -1,169 +1,110 @@
-BYND
-===
-   This is the initial version of BYND.
-   BYND is a code which combines approximate frequency
-   results with exact short time dynamics to achieve
-   an efficent calculation of electronic excitation
-   spectra. Essentially, BYND is able to give
-   highly reliable results when other super-resolution
-   techniques such as compressed-sensing typically fail.
+# BYND
 
-   BYND is totally independent of the underlying
-   electronic structrue method/code.
-   
-   The only requirement is a time-dependent
-   dipole signal (short time dynamics) and
-   a sufficient accurate initial guess for the
-   excitation spectrum.
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.12771684.svg)](https://doi.org/10.5281/zenodo.12771684)
+[![Paper](https://img.shields.io/badge/Nature_Communications-10.1038%2Fs41467--024--52368--5-blue)](https://doi.org/10.1038/s41467-024-52368-5)
 
-   BYND is still under active development, and 
-   future version will include support for:
-   
-   - quadrupole moments
-   - basis set extrapolation
-   - replacing the line-search with more
-     advanced techniques
-   - routines for easier data handling
+BYND combines approximate frequency results with exact short-time dynamics to
+compute electronic excitation spectra efficiently.  It achieves highly reliable
+results in regimes where other super-resolution techniques such as
+compressed-sensing typically fail.
 
-For a preprint article see also:
-https://arxiv.org/abs/2401.06929
+BYND is fully independent of the underlying electronic structure method or code.
+The only requirements are a time-dependent dipole signal (short-time dynamics)
+and a sufficiently accurate initial guess for the excitation spectrum.
 
-The standard execution time of BYND on a standard laptop computer
-is usually just a few minuts.
+## Publication
 
-The code can be used right away as soon all requirements
-are installed.
+If you use BYND in your research, please cite the following article:
 
-No non-standard hardware is needed.
+> M. Kick, T. Van Voorhis,
+> *Beyond the short-time limit in real-time time-dependent density functional theory simulations*,
+> **Nature Communications** 15, 8615 (2024).
+> https://doi.org/10.1038/s41467-024-52368-5
 
-DOI: 10.5281/zenodo.12771684
+A preprint is also available on arXiv: https://arxiv.org/abs/2401.06929
 
-STRUCTURE
-   ----------------------------------------------
-   Main code:
+## DOI
 
-   BYND essentially consists of two routines:
+Software archive: [10.5281/zenodo.12771684](https://doi.org/10.5281/zenodo.12771684)
 
-      1. src/simple_line_search.py
-         -> perform_line_search_tensor_off_diagonal
+## Features and planned extensions
 
-      2. src/continuum_amplitudes.py
-         -> get_continuum_freq
+BYND is under active development. Future versions will include support for:
 
-   These routines do not depend on the electronic 
-   structure code. As long the data is provided
-   correctly, these will run.
+- Quadrupole moments
+- Basis set extrapolation
+- Replacing the line search with more advanced optimisation techniques
+- Routines for easier data handling
 
-   See the provided example to find out how to use
-   both routines to perform an optimization.
+## Performance
 
-   These two routines use helper routines to 
-   perform the task which are located in:
+The standard execution time on a standard laptop is a few minutes.
+No non-standard hardware is required.
 
-      src/helpers_line_search.py
+---
 
-         -> update_amplitudes_tensor
-         -> sort_amplitudes_tensor
-         -> objective_tensor
-         -> generate_signal_tensor
-         -> get_search_grid
+## Repository structure
 
-   All other routines are helper 
-   functions to handle the data structure of 
-   the FHIaims RT-TDDFT routines.
+### Core (`src/`)
 
-   ----------------------------------------------
-   Examples:
+BYND essentially consists of two routines:
 
-      examples/optimize_frequencies.py
+1. `src/simple_line_search.py` → `perform_line_search_tensor_off_diagonal`
+2. `src/continuum_amplitudes.py` → `get_continuum_freq`
 
-   This is an example for how to perform a
-   calculation with BYND. Note, this example
-   takes long time dynamics and cuts out a
-   very short time signal. All operations
-   are performed using this short time signal.
-   In the end the long time signal is then used to
-   compare the exact result with the result obtained 
-   from BYND. For a real scenario, the long time
-   dynamics signal is not known.
+These are independent of the electronic structure code — they will run as long
+as the input data is provided in the correct format.
 
-   This script is essentially a wrapper
-   around different functions which mostly handles I/O
-   operations. At the heart of the script is 
-   the function call to 
-   'perform_line_search_tensor_off_diagonal'
-   and 'get_continuum_freq'. This is where the
-   optimization is happening.
+Both routines rely on helper functions in `src/helpers_line_search.py`:
 
-   The script assumes that all files which are
-   present in data/ are in the same folder.
+- `update_amplitudes_tensor`
+- `sort_amplitudes_tensor`
+- `objective_tensor`
+- `generate_signal_tensor`
+- `get_search_grid`
 
-   Notes on how to use the example script:
+### Example (`examples/`)
 
-   - copy all files in data/ into the folder where
-     optimize_frequencies.py is located. It might
-     be necessary to adjust the system paths in
-     optimize_frequencies.py so that the script
-     can find all necessary helper functions.
+`examples/optimize_frequencies.py` demonstrates a full BYND calculation.
+It takes a long-time RT-TDDFT signal, cuts out a short-time segment, runs the
+optimisation on that segment, and finally compares the BYND spectrum against the
+exact long-time result.  In a real application the long-time signal would not be
+available.
 
-   - Then simply run the script
-     ```bash
-     python3 optimize_frequencies.py
-     ```
+**To run the example:**
 
-   - The script should perform all necessary 
-     calculations. In the end you should
-     have spectrum_bynd_vs_exact.pdf in your
-     folder which compares the spectrum of
-     a long-time RT-TDDFT simulation with the
-     spectrum obtained from BYND.
+```bash
+# Copy the input data into the examples directory
+cp data/* examples/
 
-   Please use the example script for inspiration
-   how to use BYND in its current state. 
+# Run the optimisation
+cd examples/
+python3 optimize_frequencies.py
+```
 
-   ----------------------------------------------
-   Helpers:
+This produces `spectrum_bynd_vs_exact.pdf` comparing the BYND spectrum with the
+exact long-time RT-TDDFT reference.
 
-   This folder contains helper functions
-   which are there for I/O or for calculating
-   the final excitation spectrum.
-   This is highly specific for FHIaims and needs
-   to be adabted/changed if one uses other
-   electronic structure codes.
+### Helpers (`helpers/`)
 
-      helpers/get_spectrum_time_domain.py
+Helper functions for I/O and spectrum calculation.  These are specific to
+FHI-aims RT-TDDFT output format and will need to be adapted for other codes.
 
-      helpers/helpers_rt_tddft_fhiaims_utilities.py
+- `helpers/helpers_rt_tddft_fhiaims_utilities.py` — FHI-aims data classes
+- `helpers/get_spectrum_time_domain.py` — Fourier transform pipeline
+- `helpers/spectrum_helpers.py` — signal I/O utilities
+- `helpers/plot_spectrum.py` — spectrum plotting
 
-      helpers/spectrum_helpers.py
+### Data (`data/`)
 
-      helpers/plot_spectrum.py
-      -> simple script to plot the BYND
-         results compared to the exact
-         long time dynamics result
+Input files for the example calculation:
 
-   ----------------------------------------------
-   Data:
-
-   Contains all relevant data to perform a simple
-   example. 
-
-      -> sma_tddft.data
-         SMA frq and osci. strength
-
-      -> trans_mom_sma.data
-         SMA trans. dipole moments
-
-      -> x.rt-tddft.dipole.dat
-         RT-TDDFT dipole data E-field puls in x
-
-      -> x.rt-tddft.ext-field.dat
-         RT-TDDFT applied external field
-
-      -> y.rt-tddft.dipole.dat
-         RT-TDDFT dipole data E-field puls in y
-
-      -> z.rt-tddft.dipole.dat
-         RT-TDDFT dipole data E-field puls in z
-
-   ----------------------------------------------
+| File | Description |
+|---|---|
+| `sma_tddft.data` | SMA frequencies and oscillator strengths |
+| `trans_mom_sma.data` | SMA transition dipole moments |
+| `x.rt-tddft.dipole.dat` | RT-TDDFT dipole signal, x-polarised field |
+| `y.rt-tddft.dipole.dat` | RT-TDDFT dipole signal, y-polarised field |
+| `z.rt-tddft.dipole.dat` | RT-TDDFT dipole signal, z-polarised field |
+| `x.rt-tddft.ext-field.dat` | Applied external field |

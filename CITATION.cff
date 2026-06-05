@@ -1,9 +1,30 @@
-@software{github_bynd,
-  author = {Kick, Matthias and Van Voorhis, Troy},
-  doi = {10.5281/zenodo.12771684},
-  month = {7},
-  title = {{Super-resolution techniques to simulate electronic spectra of large molecular systems}},
-  url = {https://github.com/mk8819/bynd},
-  version = {0.1.1},
-  year = {2024}
-}
+cff-version: 1.2.0
+message: "If you use BYND, please cite both the software and the journal article."
+
+authors:
+  - family-names: Kick
+    given-names: Matthias
+  - family-names: Van Voorhis
+    given-names: Troy
+
+title: "BYND: Beyond the short-time limit in RT-TDDFT simulations"
+version: 0.1.1
+doi: 10.5281/zenodo.12771684
+date-released: 2024-07-01
+url: "https://github.com/mk8819/bynd"
+license: GPL-3.0
+
+preferred-citation:
+  type: article
+  authors:
+    - family-names: Kick
+      given-names: Matthias
+    - family-names: Van Voorhis
+      given-names: Troy
+  title: "Beyond the short-time limit in real-time time-dependent density functional theory simulations"
+  journal: "Nature Communications"
+  volume: 15
+  article-number: "8615"
+  year: 2024
+  doi: 10.1038/s41467-024-52368-5
+  url: "https://www.nature.com/articles/s41467-024-52368-5"

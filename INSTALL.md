@@ -1,63 +1,41 @@
-Installation
-===
+# Installation
 
-The code is quite easy to use it only requires a proper Python3 environment. Therefore, 
-if not already installed, make sure you have python3 installed
+BYND requires Python 3.8 or later and a small set of standard scientific
+Python packages.
 
-On linux this can simply be done by using the apt-get command. For example for Python3.8:
+## Recommended: virtual environment
 
-```console
-  sudo apt-get install python3.8
+```bash
+python3 -m venv bynd-env
+source bynd-env/bin/activate   # Windows: bynd-env\Scripts\activate
+pip install -r requirements.txt
 ```
-Make sure you have sudo permissions otherwise the installation will not work.
 
-Pip
-------------------------------------------
+## Manual install
 
-Pip is a python package which helps you to install all additional packages needed to run the code.
-It is probably the most easiest way to install all necessary dependencies. Pip is included by default
-in Python3.4 and later versions.
-
-For the latest scikit-learn version simply use:
-
-```console
-  pip install -U scikit-learn
+```bash
+pip install numpy scipy scikit-learn scikit-optimize matplotlib statsmodels
 ```
-All other packages can be installed in the same way:
-```console
-  pip install -U scikit-optimize
-```
-```console
-  pip install -U scikit-image
-```
-```console
-  pip install -U numpy
-```
-```console
-  pip install -U scipy
-```
-```console
-  pip install -U matplotlib
-```
-For a more detailed information on how to install scikit-learn
-please visit https://scikit-learn.org/stable/install.html
 
-Installation with Package manager
-------------------------------------------
-On Debian/Ubuntu scikit-learn is split in three different packages
+## Verifying the installation
 
-```console
-  sudo apt-get install python3-sklearn python3-sklearn-lib python3-sklearn-doc
+Run the provided example to confirm everything is working:
+
+```bash
+cp data/* examples/
+cd examples/
+python3 optimize_frequencies.py
 ```
-By running this command necessary dependencies (numpy/scipy) will be automatically installed.
 
-If necessary, with 
-```console
-  sudo apt-get install python3-matplotlib
-```
-you can install also matplotlib.
+This should complete in a few minutes and produce `spectrum_bynd_vs_exact.pdf`.
 
-You can now run BYND as described in the example section.
+## Dependencies
 
-
-
+| Package | Purpose |
+|---|---|
+| `numpy` | Array operations |
+| `scipy` | Signal processing |
+| `scikit-learn` | Ridge / Lasso / ElasticNet regression |
+| `scikit-optimize` | Optimisation utilities |
+| `matplotlib` | Plotting |
+| `statsmodels` | Spectrum post-processing |
