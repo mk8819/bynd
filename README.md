@@ -4,6 +4,8 @@
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.12771684.svg)](https://doi.org/10.5281/zenodo.12771684)
 [![Paper](https://img.shields.io/badge/Nature_Communications-10.1038%2Fs41467--024--52368--5-blue)](https://doi.org/10.1038/s41467-024-52368-5)
 
+**B**road **Y**et **N**arrow **D**escription
+
 BYND combines approximate frequency results with exact short-time dynamics to
 compute electronic excitation spectra efficiently.  It achieves highly reliable
 results in regimes where other super-resolution techniques such as
