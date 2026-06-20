@@ -1,4 +1,20 @@
-# class for all sma data stuff
+"""
+Data classes and Fourier-transform utilities for FHI-aims RT-TDDFT output.
+
+Provides container classes for time-series observables (dipole, field,
+current, magnetic moment, ...) read from FHI-aims output files, plus
+analysis classes that compute Fourier transforms, polarizabilities, and
+absorption spectra from them.
+
+Only a subset of these classes are used by the BYND pipeline itself
+(``VectorData``, ``FieldData``, ``DipoleData``, ``Observable``,
+``VectorObservable``, ``ElectronicDipole``, ``set_external_field``).
+The remaining classes (``CurrentData``, ``MagMomData``, ``HHGData``,
+``ElectronicCurrent``, ``MagneticMoment``, ``HHGSpectrum``) follow the
+same pattern for other observable types but are not currently wired into
+the BYND workflow.
+"""
+from __future__ import annotations
 
 import os
 import sys
@@ -22,7 +38,21 @@ class VectorData:
   a time series of a vector-valued function.
   """
 
-  def __init__(self, file_name, descriptor, flag_info_only=False):
+  def __init__(self, file_name: str | None, descriptor: str, flag_info_only: bool = False) -> None:
+    """Read a vector-valued time series from an FHI-aims output file.
+
+    Parameters
+    ----------
+    file_name:
+        Path to the FHI-aims output file.  Pass ``None`` to create an
+        empty, unread container.
+    descriptor:
+        Short label identifying this dataset (e.g. ``"dipole_x"``).
+    flag_info_only:
+        If ``True``, stop reading after the header/info block instead of
+        loading the full time series.  Used when only metadata (units,
+        settings) is needed.
+    """
 
     self.file_name      = str(file_name)
     self.descriptor     = str(descriptor)
@@ -40,12 +70,21 @@ class VectorData:
 
     self._read_data()
 
-  def _read_data(self):
+  def _read_data(self) -> None:
+    """Parse the data file into ``self.data`` and ``self.info``.
+
+    Lines starting with ``#`` are collected as header/info lines; all
+    other non-blank lines are parsed as ``TIME VALUE_X VALUE_Y VALUE_Z``
+    rows.  Stops early after the info block when ``flag_info_only`` is set.
+    Warns if the first two samples differ enough to suggest an unshifted
+    t=0 field-kick artefact.
+    """
 
     if self.file_name is None:
       return
 
-    def fix_format_E(self, spln):
+    def fix_format_E(self, spln: list[str]) -> list[str]:
+      """Insert a missing 'E' into malformed scientific-notation tokens."""
 
       out = spln
 
@@ -117,7 +156,15 @@ class VectorData:
             + "         the data that will cause unwanted artificial spectral behaviour. \n" \
             + "         It is recommended to remove the t=0 value and shift the time axis.")
 
-  def _check_units(self):
+  def _check_units(self) -> None:
+    """Validate and normalise the time/value units parsed from the file header.
+
+    Raises
+    ------
+    Exception
+        If the time or value unit is missing or not in the corresponding
+        ``valid_units_*`` list.
+    """
 
     t_unit = self.units["time"]
     v_unit = self.units["values"]
@@ -138,7 +185,20 @@ class FieldData(VectorData):
   Container for external field input data, inherits from VectorData class
   """
 
-  def __init__(self, file_name, descriptor, flag_analytic_field=False):
+  def __init__(self, file_name: str | None, descriptor: str, flag_analytic_field: bool = False) -> None:
+    """Read an external field input file.
+
+    Parameters
+    ----------
+    file_name:
+        Path to the FHI-aims external field file.  Pass ``None`` for an
+        empty container.
+    descriptor:
+        Short label for this field component (e.g. ``"field_x"``).
+    flag_analytic_field:
+        If ``True``, only read the header (the field is reconstructed
+        analytically elsewhere rather than sampled).
+    """
 
     VectorData.__init__(self, file_name, descriptor, flag_info_only=flag_analytic_field)
 
@@ -153,7 +213,15 @@ class FieldData(VectorData):
     self._check_settings()
     self._check_units()
 
-  def _check_settings(self):
+  def _check_settings(self) -> None:
+    """Parse field settings (gauge, pulse timing, amplitude, ...) from the file header.
+
+    Raises
+    ------
+    Exception
+        If the gauge is invalid, a required setting/unit is missing, or
+        the file does not contain the expected field descriptor.
+    """
 
     flag_correct_file = False
 
@@ -221,7 +289,17 @@ class DipoleData(VectorData):
   Container for time-dependent dipole input data, inherits from VectorData class
   """
 
-  def __init__(self, file_name, descriptor):
+  def __init__(self, file_name: str | None, descriptor: str) -> None:
+    """Read a time-dependent dipole moment file.
+
+    Parameters
+    ----------
+    file_name:
+        Path to the FHI-aims RT-TDDFT dipole file
+        (e.g. ``x.rt-tddft.dipole.dat``).
+    descriptor:
+        Short label for this dipole component (e.g. ``"dipole_x"``).
+    """
 
     VectorData.__init__(self, file_name, descriptor)
 
@@ -232,7 +310,14 @@ class DipoleData(VectorData):
     self._check_settings()
     self._check_units()
 
-  def _check_settings(self):
+  def _check_settings(self) -> None:
+    """Validate the dipole file header and extract its units.
+
+    Raises
+    ------
+    Exception
+        If the time or value unit is missing from the file header.
+    """
 
     flag_correct_file = False
 
@@ -362,11 +447,35 @@ class ExternalField:
   Container and calculator for analytical external field when input field not used.
   """
 
-  def __init__(self, field_settings):
+  def __init__(self, field_settings: dict) -> None:
+    """Store field settings parsed from a :class:`FieldData` header.
+
+    Parameters
+    ----------
+    field_settings:
+        The ``settings`` dict of a :class:`FieldData` instance (gauge,
+        pulse type, timing, amplitude, frequency, ...).
+    """
 
     self.field_settings = field_settings
 
   def get_field_func_ft(self):
+    """Return the analytic Fourier transform of the external field pulse.
+
+    The functional form depends on ``field_settings["type"]`` (1-5,
+    corresponding to the different FHI-aims pulse shapes: constant,
+    Gaussian-kick approximations, and Gaussian-windowed sine pulses).
+
+    Returns
+    -------
+    Callable[[np.ndarray], np.ndarray]
+        Function mapping angular frequency to the field's Fourier amplitude.
+
+    Raises
+    ------
+    Exception
+        If the field type is not one of the five supported pulse shapes.
+    """
 
     sett  = self.field_settings
 
@@ -431,24 +540,41 @@ class UnitConversion:
   """
   All functionality for unit conversion
   """
-  
-  def __init__(self, input_data=VectorData, convert_values_fac=1.0):
+
+  def __init__(self, input_data: VectorData, convert_values_fac: float = 1.0) -> None:
+    """Convert a :class:`VectorData` instance's time and value units to atomic units in place.
+
+    Parameters
+    ----------
+    input_data:
+        The data container to convert (its ``data["t"]`` and value arrays
+        are modified in place).
+    convert_values_fac:
+        Conversion factor applied when converting SI-unit values to
+        atomic units.
+    """
 
     self.input_data           = input_data
     self.conv_unit_values_fac = float(convert_values_fac)
 
     self.dat_unit_time = input_data.units["time"]
-    self.dat_unit_vals = input_data.units["values"] 
+    self.dat_unit_vals = input_data.units["values"]
 
     self._convert_units_time_to_au()
     self._convert_units_vals_to_au()
 
-  def return_data(self):
+  def return_data(self) -> VectorData:
+    """Return the (in-place converted) data container."""
     return self.input_data
 
-  # All internal computations are done with atomic units, so we need to convert time,
-  # which is usually in fs, to a.u.
-  def _convert_units_time_to_au(self):
+  def _convert_units_time_to_au(self) -> None:
+    """Convert the time axis from fs or ps to atomic units in place.
+
+    Raises
+    ------
+    Exception
+        If the source time unit is not ``"fs"`` or ``"ps"``.
+    """
 
     in_unit_t  = self.dat_unit_time
     out_unit_t = "au"
@@ -458,7 +584,7 @@ class UnitConversion:
 
     conv_t = 1.0
 
-    t_au_fs = 0.024188843265857 
+    t_au_fs = 0.024188843265857
 
     if in_unit_t == "ps":
       conv_t = 1e-3 * t_au_fs
@@ -469,9 +595,9 @@ class UnitConversion:
 
     self.input_data.data["t"] /= conv_t
 
-  # Input observables are usually in au, not much to do
-  def _convert_units_vals_to_au(self):
-  
+  def _convert_units_vals_to_au(self) -> None:
+    """Convert observable values from SI to atomic units in place, if needed."""
+
     in_unit_v  = self.dat_unit_vals
     out_unit_v = "au"
 
@@ -485,6 +611,14 @@ class UnitConversion:
       self.input_data.data["abs"] *= 1.0/self.conv_unit_values_fac
 
 class Observable:
+  """
+  Base class for time-domain observables that are Fourier-transformed into a
+  spectrum (dipole, current, magnetic moment, ...).
+
+  Holds the shared settings for damping, windowing, padding, interpolation,
+  and peak-finding that subclasses (:class:`VectorObservable` and its
+  children) use when computing their Fourier transforms.
+  """
 
   conv_t_au_to_fs       = 0.024188843265857
   conv_2pi_per_au_to_ev = 27.211386245988 # 4.13566769692 * 0.024188843265857
@@ -494,6 +628,39 @@ class Observable:
                lpeak_hgt=None, lpeak_wdt=None, t_shift=0, n_ft_pade=-1, fmin_pade=0.0, fmax_pade=-1.0, \
                t_max=0, f_min=0, f_max=-1, add_zeros=0, t0_damp=-1.0, damp_type="poly", expfac_dp=0.00001, \
                calc_type="standard",  out_file_name=None):
+    """Configure Fourier-transform and post-processing settings for an observable.
+
+    Most parameters are optional knobs for the FFT pipeline; the most
+    commonly used ones are:
+
+    Parameters
+    ----------
+    flag_plot:
+        If ``True``, generate plots of the computed spectra.
+    flag_analytic_ft:
+        If ``True``, use the analytic Fourier transform of the external
+        field instead of FFT-ing sampled field data.
+    t_min, t_max:
+        Time window (fs) used for the Fourier transform; ``t_max <= 0``
+        means "use the full signal".
+    f_min, f_max:
+        Frequency window (eV) for the output spectrum; ``f_max < 0`` means
+        "no upper cutoff".
+    t0_damp, damp_type, expfac_dp:
+        Damping function applied before the FFT to suppress truncation
+        artefacts (``damp_type`` one of ``"poly"``, ``"exp"``, ``"sinsq"``;
+        disabled when ``t0_damp < 0``).
+    add_zeros:
+        Number of zero-padding points appended before the FFT.
+    n_ft_pade, fmin_pade, fmax_pade:
+        Settings for an optional Pade-approximant Fourier transform
+        (enabled when ``n_ft_pade >= 0`` and ``fmax_pade >= 0``).
+    lpeak_hgt, lpeak_wdt:
+        Minimum relative height / width for automatic peak detection in
+        the resulting spectrum.
+    out_file_name:
+        Prefix used for all output files written by this observable.
+    """
 
     self.flag_plot        = bool(flag_plot)
     self.flag_normalize   = bool(flag_normalize)
@@ -525,7 +692,23 @@ class Observable:
     self.flag_locpeak = True if self.locpeak_height is not None and self.locpeak_width is not None else False
     self.flag_ft_via_pade = True if self.n_ft_pade >= 0 and self.fmax_pade >= 0 else False 
 
-  def _write_output_data(self, out_name, desc, comm, xvals, *values):
+  def _write_output_data(self, out_name: str, desc: str, comm: str, xvals, *values) -> None:
+    """Write one or more value columns alongside *xvals* to a ``.dat`` file.
+
+    Parameters
+    ----------
+    out_name:
+        File name prefix; the file is written to ``{out_name}.{desc}.dat``.
+    desc:
+        Suffix describing the data (e.g. ``"abs_strength"``).
+    comm:
+        Header/comment text written at the top of the file.
+    xvals:
+        Common x-axis values (e.g. frequency), one row per value.
+    *values:
+        One or more y-axis value arrays (or tuples of arrays) to write
+        as additional columns.
+    """
 
     def println(x, v):
       ostr = ""
@@ -545,7 +728,30 @@ class Observable:
         
     print("> File written: {0}".format(out_file)) 
 
-  def _interpolate_data(self, flag_unshift, intp_data, intp_fac):
+  def _interpolate_data(self, flag_unshift: bool, intp_data: np.ndarray, intp_fac: float) -> np.ndarray:
+    """Upsample a 1-D signal via cubic interpolation.
+
+    Parameters
+    ----------
+    flag_unshift:
+        If ``True``, subtract the mean of the second half of the signal
+        before interpolating (removes a DC offset/drift).
+    intp_data:
+        Signal to interpolate.
+    intp_fac:
+        Interpolation factor; must be greater than 1.0.
+
+    Returns
+    -------
+    np.ndarray
+        Interpolated signal, sampled at ``intp_fac`` times the original
+        density.
+
+    Raises
+    ------
+    Exception
+        If ``intp_fac`` is not greater than 1.0.
+    """
 
     if intp_fac <= 1.0:
       raise Exception("> Invalid value for interpolation factor. Needs to be > 1")
@@ -564,7 +770,23 @@ class Observable:
 
     return intp(x_intp)[:-1]
 
-  def _locate_peaks(self, f_axis, val_axis):
+  def _locate_peaks(self, f_axis: np.ndarray, val_axis: np.ndarray):
+    """Find local peaks in a spectrum using ``scipy.signal.find_peaks``.
+
+    Parameters
+    ----------
+    f_axis:
+        Frequency axis (atomic units).
+    val_axis:
+        Spectrum intensity values, same length as *f_axis*.
+
+    Returns
+    -------
+    tuple
+        ``(peak_indices, properties)`` as returned by
+        :func:`scipy.signal.find_peaks`, using ``self.locpeak_height``
+        and ``self.locpeak_width`` as the minimum height/width thresholds.
+    """
 
     # percent of max for setting min values
     if self.locpeak_height > 1e-5:
@@ -590,8 +812,30 @@ class Observable:
     return sig.find_peaks(val_axis, height=minhgt, width=minwdt)
 
 class VectorObservable(Observable):
+  """
+  Base class for vector-valued observables (dipole, current, magnetic moment).
 
-  def __init__(self, data_x=None, data_y=None, data_z=None, input_field=None, **kwargs):
+  Combines three :class:`VectorData` components (x, y, z) with the driving
+  :class:`FieldData`, and provides the shared machinery used by subclasses
+  to compute Fourier transforms and derived spectra against that field.
+  """
+
+  def __init__(self, data_x: VectorData | None = None, data_y: VectorData | None = None,
+               data_z: VectorData | None = None, input_field=None, **kwargs) -> None:
+    """Store the vector components and driving field for this observable.
+
+    Parameters
+    ----------
+    data_x, data_y, data_z:
+        The x/y/z components of the observable, each a :class:`VectorData`
+        instance (e.g. three :class:`DipoleData` objects from separate
+        field-pulse simulations). Deep-copied on assignment.
+    input_field:
+        The driving :class:`FieldData`, typically built via
+        :func:`set_external_field`. Deep-copied on assignment.
+    **kwargs:
+        Forwarded to :class:`Observable`.
+    """
 
     Observable.__init__(self, **kwargs)
 
@@ -616,7 +860,15 @@ class VectorObservable(Observable):
     if self.intp_fac is not None:
       self._interpolate_ft_vec()
 
-  def _check_data(self):
+  def _check_data(self) -> None:
+    """Validate that the x/y/z components have matching length and units.
+
+    Raises
+    ------
+    Exception
+        If the three components have mismatched lengths or units, or if
+        more than two of them are ``None``.
+    """
 
     dat = [self.data_x, self.data_y, self.data_z]
 
@@ -651,7 +903,8 @@ class VectorObservable(Observable):
       if dat.count(None) != 2:
         raise Exception("> If input data is given as None, the amount can be only 2, else all must not be None")
 
-  def _convert_units(self):
+  def _convert_units(self) -> None:
+    """Convert each x/y/z component and the driving field to atomic units in place."""
 
     dat = [self.data_x, self.data_y, self.data_z]
 
@@ -673,7 +926,17 @@ class VectorObservable(Observable):
 
     print("> Converted units: time, observable & field --> atomic units")
 
-  def _setup_data(self):
+  def _setup_data(self) -> None:
+    """Crop the observable and field data to ``[t_min, t_max]`` and store the result in ``obs_data``/``field``.
+
+    Also derives the uniform time step ``self.delta_t``.
+
+    Raises
+    ------
+    Exception
+        If ``calc_type`` is not ``"standard"``, or if the derived time
+        step is effectively zero (malformed input).
+    """
 
     tc = Observable.conv_t_au_to_fs
 
@@ -745,7 +1008,11 @@ class VectorObservable(Observable):
     else:
       raise Exception("> Calculation type {0} not implemented!".format(self.calc_type))
 
-  def _interpolate_ft_vec(self):
+  def _interpolate_ft_vec(self) -> None:
+    """Upsample the observable and field Fourier transforms by ``self.intp_fac``.
+
+    Plots the original vs. interpolated curves when ``flag_intp_plot`` is set.
+    """
 
     obs_ft_save = dc(self.obs_ft_data)
 
@@ -780,7 +1047,21 @@ class VectorObservable(Observable):
       ax.legend(loc="upper right")
       ax.set_title("Interpolated FT data")
 
-  def _damp_signal(self, data):
+  def _damp_signal(self, data: dict) -> None:
+    """Apply a windowing/damping function to the signal in place before the FFT.
+
+    Subtracts the average of the final 5% of samples (to remove a residual
+    offset), then multiplies by a damping window (``self.damp_type``: one
+    of ``"poly"``, ``"exp"``, ``"sinsq"``) starting at ``self.t0_damp``.
+    Suppresses FFT truncation artefacts at the cost of some spectral
+    resolution. Also writes the damped signal to ``check_damp.dat`` for
+    inspection.
+
+    Parameters
+    ----------
+    data:
+        Dict with keys ``"t"``, ``"x"``, ``"y"``, ``"z"``; modified in place.
+    """
 
     def f_damp(t, t0, t_tot):
       """
@@ -826,7 +1107,14 @@ class VectorObservable(Observable):
     print("-> Converging to data averages (50% of points before damp): {0:1.3g} {1:1.3g} {2:1.3g}" \
           .format(xavg50, yavg50, zavg50))
 
-  def _calculate_fts(self):
+  def _calculate_fts(self) -> None:
+    """Compute the Fourier transform of the observable and the driving field.
+
+    Optionally damps the signal first (``self.flag_damp_ft``), then computes
+    either a standard FFT or a Pade-approximant FFT (``self.flag_ft_via_pade``)
+    over both the observable and the field, storing the results in
+    ``self.obs_ft_data`` and ``self.field_ft_data``.
+    """
 
     ft_data = { "t": self.obs_data["t"], "x": self.obs_data["x"], "y": self.obs_data["y"], \
                 "z": self.obs_data["z"] }
@@ -966,6 +1254,19 @@ class VectorObservable(Observable):
       print("-> t(max, zero-padded) = {0:8.4f} fs".format(tmax_p))
 
   def normalize_max(self, *data_series):
+    """Normalise one or more series by their own maximum absolute value.
+
+    Parameters
+    ----------
+    *data_series:
+        One or more 1-D sequences to normalise independently.
+
+    Returns
+    -------
+    The normalised series (a single sequence if only one was passed,
+    otherwise a tuple). Series whose maximum is effectively zero are
+    left unscaled to avoid division by zero.
+    """
 
     out_series = []
 
@@ -982,14 +1283,34 @@ class VectorObservable(Observable):
 
 class ElectronicDipole(VectorObservable):
   """
-  Class for any electronic diple data from which we can calculate the adsorption strength etc.
+  Electronic dipole observable: computes polarizability, power spectrum, and
+  absorption strength from a time-dependent dipole signal and its driving field.
+
+  This is the class instantiated by
+  :func:`get_spectrum_time_domain.compute_spectrum_using_time_signal` for both
+  the long-time RT-TDDFT reference and the BYND-reconstructed signal.
   """
 
   desc = "electronic_dipole"
   conv_obs_au2si = 8.4783536255e-30 # Cm
   conv_fld_au2si = 5.14220674763e11 # V/m
 
-  def __init__(self, **kwargs):
+  def __init__(self, **kwargs) -> None:
+    """Build an electronic dipole observable and compute its spectrum.
+
+    Parameters
+    ----------
+    **kwargs:
+        Forwarded to :class:`VectorObservable` / :class:`Observable`
+        (``data_x``, ``data_y``, ``data_z``, ``input_field``, and the
+        Fourier-transform/damping/plotting settings).
+
+    Notes
+    -----
+    On construction this immediately computes the polarizability, power
+    spectrum, and absorption strength; plots them if ``flag_plot`` is set;
+    and writes them to ``{out_file_name}.*.dat`` if ``out_file_name`` is given.
+    """
 
     VectorObservable.__init__(self, conv_obs_au2si=ElectronicDipole.conv_obs_au2si, \
       conv_fld_au2si=ElectronicDipole.conv_fld_au2si, **kwargs)
@@ -1008,7 +1329,13 @@ class ElectronicDipole(VectorObservable):
     if self.out_file_name is not None:
       self._write_results()
 
-  def _write_results(self):
+  def _write_results(self) -> None:
+    """Write the dipole FT, polarizability, absorption strength, and power spectrum to files.
+
+    Output files are named ``{out_file_name}.{dipole_ft,polarisability,
+    abs_strength,pow_spec}.dat`` (plus ``pow_spec_peaks.dat`` when peak
+    detection is enabled).
+    """
 
     en_vals = self.pol["f"] * Observable.conv_2pi_per_au_to_ev
 
@@ -1045,7 +1372,8 @@ class ElectronicDipole(VectorObservable):
       self._write_output_data(self.out_file_name, desc, comm, self.powsp["f_peak"]*Observable.conv_2pi_per_au_to_ev, \
                               *[self.powsp["val_peaks"]])
 
-  def _calculate_polarisability(self):
+  def _calculate_polarisability(self) -> None:
+    """Compute the diagonal polarizability tensor as dipole-FT / field-FT, component-wise."""
 
     obs_ft = dc(self.obs_ft_data)
     fld_ft = dc(self.field_ft_data)
@@ -1067,7 +1395,12 @@ class ElectronicDipole(VectorObservable):
 
     print("> Polarisability calculated.")
 
-  def _calculate_power_spectrum(self):
+  def _calculate_power_spectrum(self) -> None:
+    """Compute the power spectrum as the trace of |polarizability|^2, scaled by 2/3.
+
+    Also integrates the spectrum and, if peak detection is enabled, locates
+    local maxima via :meth:`Observable._locate_peaks`.
+    """
 
     pol_xx = dc(self.pol["xx"])
     pol_yy = dc(self.pol["zz"])
@@ -1097,8 +1430,14 @@ class ElectronicDipole(VectorObservable):
 
     print("> Power spectrum calculated.")
 
-  def _calculate_abs_strength(self):
- 
+  def _calculate_abs_strength(self) -> None:
+    """Compute the dipole absorption strength function from the polarizability trace.
+
+    ``S(omega) = (2/3pi) * omega * Im[trace(alpha(omega))]``. Its integral
+    over frequency should equal the number of valence electrons (the
+    Thomas-Reiche-Kuhn f-sum rule), unless damping was applied.
+    """
+
     pol_xx = dc(self.pol["xx"])
     pol_yy = dc(self.pol["zz"])
     pol_zz = dc(self.pol["yy"])
@@ -1125,7 +1464,8 @@ class ElectronicDipole(VectorObservable):
     print("   NOTE: this value should equal the number of valence electrons. It is only correctly")
     print("         calculated when damping (-d) is NOT included in this calculation.")
 
-  def _plot_results(self):
+  def _plot_results(self) -> None:
+    """Plot the dipole/field FT, polarizability, and absorption strength spectra."""
 
     print("> Plotting data ...")
     
@@ -1873,11 +2213,44 @@ class MyParser(argparse.ArgumentParser):
 # Functions #############################################################################
 #########################################################################################
 
-def set_external_field(field_x, field_y, field_z, flag_copy_ref=False, flag_analytic_field=False):
+def set_external_field(
+    field_x: "FieldData | None",
+    field_y: "FieldData | None",
+    field_z: "FieldData | None",
+    flag_copy_ref: bool = False,
+    flag_analytic_field: bool = False,
+) -> "FieldData":
+  """Assemble a single 3-component driving field from one or three field inputs.
 
-  """
-    field_i is an object of the FieldData class and contains the corresponding input fields
-    -> Returns a FieldData object containing the desired x,y,z components
+  Either a single field (assumed to be polarised along one axis, with the
+  other two components derived or copied from it) or three separate fields
+  (one per Cartesian direction) must be provided.
+
+  Parameters
+  ----------
+  field_x, field_y, field_z:
+      :class:`FieldData` instances for each component. Pass only *field_x*
+      to derive the y/z components from it, or all three for independent
+      per-axis field-pulse simulations.
+  flag_copy_ref:
+      When only *field_x* is given: if ``True``, detect its polarisation
+      axis and copy that component's settings/data to the other two axes
+      (used when y/z field files were not run, e.g. for a static-incidence
+      pulse). If ``False``, the single field is returned unmodified.
+  flag_analytic_field:
+      If ``True``, skip copying/merging the sampled ``data`` arrays
+      (only ``settings`` are combined) since the field will be evaluated
+      analytically downstream.
+
+  Returns
+  -------
+  FieldData
+      A single field object with x/y/z components combined as requested.
+
+  Raises
+  ------
+  Exception
+      If neither exactly one nor all three field inputs are provided.
   """
 
   if field_x is not None and (field_y is None and field_z is None):
